@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Bluetooth Discovery/API PoC</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        #bluetoothStatus { margin-bottom: 20px; font-style: italic; }
+        #apiResponse { margin-top: 20px; padding: 10px; background-color: #f0f0f0; border: 1px solid #ccc; white-space: pre-wrap; }
+        .error { color: red; font-weight: bold; }
+        .success { color: green; }
+    </style>
+</head>
+<body>
+
+    <h1>Web Bluetooth Service PoC</h1>
+
+    <p id="bluetoothStatus"></p>
+
+    <button id="discoverAndCallButton">Discover & Call Backend Bluetooth Device</button>
+
+    <h2>Backend API Response (via Bluetooth GATT Read)</h2>
+    <pre id="apiResponse">Click the button to discover a Bluetooth device and read the characteristic.</pre>
+
+    <script>
+        const bluetoothStatusEl = document.getElementById('bluetoothStatus');
+        const discoverAndCallButton = document.getElementById('discoverAndCallButton');
+        const apiResponseEl = document.getElementById('apiResponse');
+
+        // --- Define GATT Service and Characteristic UUIDs ---
+        // THESE UUIDs MUST MATCH what your Bluetooth Backend Device implements!
+        // You would define these based on your specific Bluetooth service design.
+        const HELLO_SERVICE_UUID = '12345678-1234-5678-1234-56789abcdef0';
+        const HELLO_CHARACTERISTIC_UUID = '12345678-1234-5678-1234-56789abcdef1';
+
+        // --- Check for Web Bluetooth API availability ---
+        if ('bluetooth' in navigator) {
+            bluetoothStatusEl.textContent = 'Web Bluetooth API is available.';
+            discoverAndCallButton.disabled = false;
+        } else {
+            bluetoothStatusEl.textContent = 'Web Bluetooth API is NOT available in this browser or context (requires HTTPS/localhost).';
+            bluetoothStatusEl.className = 'error';
+            discoverAndCallButton.disabled = true;
+            discoverAndCallButton.textContent = 'Web Bluetooth Not Supported';
+        }
+
+        // --- Function to discover, connect, and read characteristic ---
+        async function discoverAndCallBackend() {
+            apiResponseEl.textContent = 'Scanning for Bluetooth devices...';
+            apiResponseEl.className = ''; // Reset class
+
+            try {
+                // 1. Request a Bluetooth Device
+                // The browser shows a picker to the user. We filter by our known Service UUID.
+                console.log('Requesting Bluetooth Device...');
+                const device = await navigator.bluetooth.requestDevice({
+                    filters: [{
+                        services: [HELLO_SERVICE_UUID]
+                    }]
+                    // OR acceptAllDevices: true // If you don't want to filter by service during discovery
+                    // OR filters: [{ namePrefix: 'MyCoolAppBackend' }] // Filter by device name
+                });
+
+                apiResponseEl.textContent = `Connecting to ${device.name}...`;
+
+                // 2. Connect to the GATT Server
+                console.log('Connecting to GATT Server...');
+                const server = await device.gatt.connect();
+
+                apiResponseEl.textContent = `Connected to ${device.name}. Getting Service...`;
+
+                // 3. Get the Primary Service
+                console.log('Getting Service...');
+                const service = await server.getPrimaryService(HELLO_SERVICE_UUID);
+
+                apiResponseEl.textContent = `Service found. Getting Characteristic...`;
+
+                // 4. Get the Characteristic
+                console.log('Getting Characteristic...');
+                console.log({service});
+                const characteristic = await service.getCharacteristic(HELLO_CHARACTERISTIC_UUID);
+
+                apiResponseEl.textContent = `Characteristic found. Writing value...`;
+
+                // 5. Write to the Characteristic
+                console.log('Writing to Characteristic...');
+                const encoder = new TextEncoder();
+                const data = encoder.encode('Hello, Bluetooth!'); // Replace with your data
+                await characteristic.writeValue(data);
+
+                apiResponseEl.textContent = `Data successfully written to the characteristic.`;
+                apiResponseEl.className = 'success'; // Indicate success
+
+                // Optional: Disconnect after reading if you don't need to stay connected
+                // console.log('Disconnecting...');
+                // device.gatt.disconnect();
+                // console.log('Disconnected.');
+
+            } catch (error) {
+                console.error('Bluetooth error:', error);
+                apiResponseEl.textContent = `Bluetooth Error: ${error.message}`;
+                apiResponseEl.className = 'error';
+            }
+        }
+
+        // --- Attach event listener to the button ---
+        if (!discoverAndCallButton.disabled) {
+             discoverAndCallButton.addEventListener('click', discoverAndCallBackend);
+        }
+
+
+    </script>
+
+</body>
+</html>
